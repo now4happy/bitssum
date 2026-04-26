@@ -1,6 +1,6 @@
 """
 bithumb_api.py
-빗썸 REST API 래퍼
+빗썸 REST API 래퍼 — V4.1.0
 - 공개: 현재가, 호가창
 - 개인: 잔고, 시장가매수, 지정가매수, 지정가매도, 주문취소, 미체결조회, 체결내역
 """
@@ -12,8 +12,11 @@ import requests
 import urllib.parse
 import os
 from dotenv import load_dotenv
+from version import VERSION
 
 load_dotenv()
+
+print(f"[bithumb_api.py] V{VERSION} 로드됨")
 
 
 class BithumbAPI:
@@ -111,7 +114,7 @@ class BithumbAPI:
     # ── 시장가 주문 ────────────────────────────────────
 
     def buy_market(self, ticker: str, amount_krw: int) -> dict:
-        """시장가 매수 (KRW 금액 기준) — 새출발 1회에 사용"""
+        """시장가 매수 (KRW 금액 기준)"""
         return self._private("/trade/market_buy", {
             "order_currency":   ticker,
             "payment_currency": "KRW",
@@ -119,7 +122,7 @@ class BithumbAPI:
         })
 
     def sell_market(self, ticker: str, units: float) -> dict:
-        """시장가 매도 (코인 수량 기준) — 긴급 손절 등에 사용"""
+        """시장가 매도 (코인 수량 기준)"""
         return self._private("/trade/market_sell", {
             "order_currency":   ticker,
             "payment_currency": "KRW",
