@@ -1,13 +1,13 @@
 #!/bin/bash
 
-# 무매 V4.1.0 — 자동 업데이트 스크립트
+# 무매 V4.1.1 — 자동 업데이트 스크립트
 
-echo "🔄 무매 V4.1.0 업데이트 시작..."
+echo "🔄 무매 업데이트 시작..."
 
 # 현재 버전 확인
 echo "📌 현재 버전 확인..."
 if [ -f "version.py" ]; then
-    python3 -c "from version import VERSION; print(f'현재 버전: V{VERSION}')"
+    python3 -c "from version import VERSION, BUILD_DATE; print(f'현재 버전: V{VERSION} (빌드: {BUILD_DATE})')" 2>/dev/null || echo "현재 버전: 알 수 없음"
 fi
 
 # 1. 최신 코드 가져오기
@@ -17,13 +17,16 @@ git pull origin main
 # 새 버전 확인
 echo "📌 새 버전 확인..."
 if [ -f "version.py" ]; then
-    python3 -c "from version import VERSION, BUILD_DATE; print(f'업데이트 버전: V{VERSION} (빌드: {BUILD_DATE})')"
+    python3 -c "from version import VERSION, BUILD_DATE; print(f'업데이트 버전: V{VERSION} (빌드: {BUILD_DATE})')" 2>/dev/null || echo "버전 확인 실패"
 fi
 
 # 2. 패키지 업데이트 (변경사항 있을 경우)
 echo "📦 패키지 확인 중..."
-source venv/bin/activate
-pip install -r requirements.txt
+if [ -d "venv" ]; then
+    source venv/bin/activate
+    pip install -r requirements.txt
+    deactivate
+fi
 
 # 3. 봇 재시작
 echo "🔄 봇 재시작 중..."

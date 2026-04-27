@@ -1,11 +1,9 @@
 """
-bot.py — 무매 V4.1.0 텔레그램 봇 완전판
+bot.py — 무매 V4.1.1 텔레그램 봇 완전판
 
-V4.1.0 변경사항:
-- 버전 번호 명시
-- /balance 명령어 추가 (빗썸 잔고 체크)
-- 시드머니 관리 개선
-- 모든 응답에 버전 표시
+V4.1.1 변경사항:
+- FIX: /register 명령어 충돌 문제 해결
+- CommandHandler 제거, 텍스트 핸들러로 통합
 """
 
 import os
@@ -57,7 +55,7 @@ def ok(update: Update) -> bool:
 
 
 # ══════════════════════════════════════════════════════
-# /start — 운영 스케줄 포함
+# /start
 # ══════════════════════════════════════════════════════
 
 async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -68,27 +66,27 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         f"🌨 [ {VERSION_NAME} ]\n"
         f"💎 BTC / ETH 자동매매 시스템\n\n"
-        f"⏰ [ 운영 스케줄 (⏰ 24시간 가동) ]\n"
-        f"🔹 매 3분: 🔍 시장 분석 & 주문 체결 확인\n"
-        f"🔹 09:00: 📊 일일 정산 리포트\n"
-        f"🔹 실시간: 🎯 별지점 자동 계산\n\n"
+        f"⏰ [ 운영 스케줄 ]\n"
+        f"🔹 매 3분: 시장 분석 & 체결 확인\n"
+        f"🔹 09:00: 일일 정산 리포트\n"
+        f"🔹 실시간: 별지점 자동 계산\n\n"
         f"🔧 [ 주요 명령어 ]\n"
-        f"▶️ /sync : 📋 통합 지시서 조회\n"
-        f"▶️ /balance : 💰 빗썸 잔고 확인\n"
-        f"▶️ /record : 📒 장부 등기화 및 조회\n"
-        f"▶️ /history : 🏆 졸업 명예의 전당\n"
-        f"▶️ /settlement : ⚙️ 코어스위칭/전술설정\n"
-        f"▶️ /seed : 💵 개별 시드머니 관리\n"
-        f"▶️ /register : ⭐ 1차 수동 등록\n"
-        f"▶️ /mode : 🎯 상방 스나이퍼 ON/OFF\n\n"
+        f"▶️ /sync : 통합 지시서\n"
+        f"▶️ /balance : 빗썸 잔고 확인\n"
+        f"▶️ /register : 1차 수동 등록\n"
+        f"▶️ /seed : 시드머니 관리\n"
+        f"▶️ /settlement : 분할수 설정\n"
+        f"▶️ /record : 거래 장부\n"
+        f"▶️ /history : 졸업 기록\n"
+        f"▶️ /mode : 자동매매 ON/OFF\n\n"
         f"🤖 자동매매: {status}\n"
-        f"⏰ 현재 시각: {now}\n"
+        f"⏰ 현재: {now}\n"
         f"📌 버전: V{VERSION}"
     )
 
 
 # ══════════════════════════════════════════════════════
-# /sync — 통합 지시서 (상세)
+# /sync
 # ══════════════════════════════════════════════════════
 
 async def cmd_sync(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -99,7 +97,6 @@ async def cmd_sync(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         sp = strat.get_star_point()
         zone, _ = strat.get_zone()
         
-        # 모드 판단
         if strat.mode == "REVERSE":
             mode_label = "🔄 리버스"
         elif strat.is_loss_mode():
@@ -107,22 +104,17 @@ async def cmd_sync(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         else:
             mode_label = "💎 전반전" if strat.is_first_half() else "💎 후반전"
         
-        # 수익률
         pnl_pct = ((price - strat.avg_price) / strat.avg_price * 100
                    if strat.avg_price > 0 else 0)
         pnl_krw = round((price - strat.avg_price) * strat.total_units)
         
-        # 다음 매수금
         next_budget = strat.get_buy_budget()
-        
-        # 별% (일반모드만)
         sp_pct = strat.star_pct() if strat.mode == "NORMAL" else 0
         
-        # 통합 지시서
         now_time = datetime.now().strftime("%H:%M")
         msg = (
             f"📊 [ 통합 지시서 ({mode_label}) — V{VERSION} ]\n\n"
-            f"⏰ 현재 시각: {now_time}\n"
+            f"⏰ 현재: {now_time}\n"
             f"💵 종목가능금액: {strat.remaining_cash:,}원\n"
             f"🏦 RP 투자권장: {strat.seed:,}원\n"
             f"{'─' * 30}\n\n"
@@ -138,14 +130,12 @@ async def cmd_sync(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             f"📋 [주문 계획 - 🌙 {mode_label}]\n"
         )
         
-        # 주문 내역
         if zone == "BUY":
             if strat.mode == "REVERSE":
                 buy_price = sp - 1
                 units = round(next_budget / buy_price, 6)
                 msg += f"🔵 ⚓쿼터매수: {buy_price:,.0f}원 x {units:.6f}개 (LOC)\n"
             elif strat.is_first_half():
-                # 전반전: 1/2은 별지점, 1/2은 평단
                 half = round(next_budget / 2)
                 sp_price = sp - 1
                 avg_price = round(strat.avg_price)
@@ -154,7 +144,6 @@ async def cmd_sync(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                 msg += f"🔴 ⚓평단매수: {avg_price:,.0f}원 x {units_avg:.6f}개 (LOC)\n"
                 msg += f"🔵 💫별값매수: {sp_price:,.0f}원 x {units_sp:.6f}개 (LOC)\n"
             else:
-                # 후반전: 전액 별지점
                 sp_price = sp - 1
                 units = round(next_budget / sp_price, 6)
                 msg += f"🔵 💫별값매수: {sp_price:,.0f}원 x {units:.6f}개 (LOC)\n"
@@ -175,7 +164,6 @@ async def cmd_sync(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         
         await update.message.reply_text(msg)
     
-    # 하단 요약
     total_profit = db.get_total_profit()
     await update.message.reply_text(
         f"💰 누적손익: {total_profit:,}원\n"
@@ -184,7 +172,7 @@ async def cmd_sync(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 
 # ══════════════════════════════════════════════════════
-# /balance — 빗썸 잔고 확인 (V4.1.0 신규)
+# /balance
 # ══════════════════════════════════════════════════════
 
 async def cmd_balance(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -196,7 +184,7 @@ async def cmd_balance(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 
 # ══════════════════════════════════════════════════════
-# /targets — 별지점 테이블
+# /targets
 # ══════════════════════════════════════════════════════
 
 async def cmd_targets(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -207,27 +195,7 @@ async def cmd_targets(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 
 # ══════════════════════════════════════════════════════
-# /register — 1차 수동 등록
-# ══════════════════════════════════════════════════════
-
-async def cmd_register(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    if not ok(update): return
-    await update.message.reply_text(
-        f"⭐ [ 1차 매수 수동 등록 ] — V{VERSION}\n\n"
-        "형식: /register <ticker> <체결가> <수량> <사용금액>\n\n"
-        "예시:\n"
-        "  /register BTC 115666000 0.0001296 15017\n"
-        "  /register ETH 3455000 0.1537 530000\n\n"
-        "⚠️ 주의사항:\n"
-        "  • 띄어쓰기로만 구분\n"
-        "  • 쉼표(,) 사용 금지\n"
-        "  • 단위(원, 개) 사용 금지\n"
-        "  • 숫자만 입력"
-    )
-
-
-# ══════════════════════════════════════════════════════
-# /seed — 시드머니 관리
+# /seed
 # ══════════════════════════════════════════════════════
 
 def seed_text():
@@ -266,7 +234,7 @@ async def cmd_seed(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 
 # ══════════════════════════════════════════════════════
-# /settlement — 코어스위칭/전술설정
+# /settlement
 # ══════════════════════════════════════════════════════
 
 def strat_text():
@@ -309,7 +277,7 @@ async def cmd_settlement(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 
 # ══════════════════════════════════════════════════════
-# /record — 장부 등기화
+# /record
 # ══════════════════════════════════════════════════════
 
 async def cmd_record(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -340,7 +308,7 @@ async def cmd_record(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 
 # ══════════════════════════════════════════════════════
-# /history — 졸업 명예의 전당
+# /history
 # ══════════════════════════════════════════════════════
 
 async def cmd_history(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -365,7 +333,7 @@ async def cmd_history(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 
 # ══════════════════════════════════════════════════════
-# /mode — 상방 스나이퍼 ON/OFF
+# /mode
 # ══════════════════════════════════════════════════════
 
 async def cmd_mode(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -405,7 +373,6 @@ async def on_button(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if d == "noop":
         return
 
-    # 자동매매 토글
     if d == "mode_on":
         auto_on = True
         await q.edit_message_text(f"✅ 자동매매 ON (V{VERSION})")
@@ -415,7 +382,6 @@ async def on_button(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await q.edit_message_text(f"⛔ 자동매매 OFF (V{VERSION})")
         return
 
-    # 시드 버튼
     if d.startswith("seed_"):
         parts  = d.split("_")
         ticker = parts[1]
@@ -439,7 +405,6 @@ async def on_button(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             await q.edit_message_text(seed_text(), reply_markup=seed_kb())
         return
 
-    # 분할수 버튼
     if d.startswith("split_"):
         _, ticker, n = d.split("_")
         n = int(n)
@@ -464,16 +429,34 @@ async def on_button(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 
 # ══════════════════════════════════════════════════════
-# 텍스트 입력
+# 텍스트 입력 (여기서 /register 처리!) ⭐ 중요
 # ══════════════════════════════════════════════════════
 
 async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not ok(update): return
     text = update.message.text.strip()
 
-    # /register 처리
+    # /register 처리 ⭐ 핵심
     if text.startswith("/register"):
         parts = text.split()
+        
+        # 사용법 안내
+        if len(parts) == 1:
+            await update.message.reply_text(
+                f"⭐ [ 1차 매수 수동 등록 ] — V{VERSION}\n\n"
+                "형식: /register <ticker> <체결가> <수량> <사용금액>\n\n"
+                "예시:\n"
+                "  /register BTC 115666000 0.0001296 15017\n"
+                "  /register ETH 3455000 0.1537 530000\n\n"
+                "⚠️ 주의사항:\n"
+                "  • 띄어쓰기로만 구분\n"
+                "  • 쉼표(,) 사용 금지\n"
+                "  • 단위(원, 개) 사용 금지\n"
+                "  • 숫자만 입력"
+            )
+            return
+        
+        # 실제 등록 처리
         if len(parts) != 5:
             await update.message.reply_text(
                 "❌ 형식 오류\n\n"
@@ -536,22 +519,18 @@ def run_auto(app):
 
         for ticker, strat in strategies.items():
             try:
-                # 1. 종가 히스토리 업데이트
                 strat.update_price_history()
 
-                # 2. 모드 전환 체크
                 transition = strat.check_mode_transition()
                 if transition:
                     asyncio.run(app.bot.send_message(ALLOWED_CHAT, f"[{ticker}] {transition}"))
                     if "리버스모드 전환" in transition:
                         reverse_first[ticker] = True
 
-                # 3. 체결 여부 확인
                 event, msg = strat.check_orders_filled()
                 if event and msg:
                     asyncio.run(app.bot.send_message(ALLOWED_CHAT, msg))
 
-                # 4. 구간 판단 & 주문 등록
                 zone, reason = strat.get_zone()
 
                 if zone == "NEW":
@@ -601,7 +580,7 @@ def run_auto(app):
 
 
 # ══════════════════════════════════════════════════════
-# 메인
+# 메인 ⭐ /register CommandHandler 제거됨!
 # ══════════════════════════════════════════════════════
 
 def main():
@@ -611,7 +590,7 @@ def main():
     app.add_handler(CommandHandler("sync",        cmd_sync))
     app.add_handler(CommandHandler("balance",     cmd_balance))
     app.add_handler(CommandHandler("targets",     cmd_targets))
-    app.add_handler(CommandHandler("register",    cmd_register))
+    # ⭐ /register CommandHandler 제거 (on_text에서 처리)
     app.add_handler(CommandHandler("seed",        cmd_seed))
     app.add_handler(CommandHandler("settlement",  cmd_settlement))
     app.add_handler(CommandHandler("record",      cmd_record))
