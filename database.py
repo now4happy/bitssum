@@ -1,6 +1,6 @@
 """
 database.py
-거래 내역, 상태, 졸업 기록을 SQLite에 저장 — V4.1.0
+거래 내역 및 상태 관리 — V5.0
 """
 
 import sqlite3
@@ -31,10 +31,7 @@ class Database:
                 avg_price REAL,
                 total_units REAL,
                 buy_count REAL,
-                stage INTEGER,
-                split INTEGER,
-                mode TEXT,
-                price_history TEXT,
+                first_buy_done INTEGER DEFAULT 0,
                 updated_at TEXT
             )
         """)
@@ -52,28 +49,25 @@ class Database:
             )
         """)
 
-        # 졸업(익절) 명예의 전당
+        # 졸업 기록
         c.execute("""
             CREATE TABLE IF NOT EXISTS graduation (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 ticker TEXT,
                 profit_krw INTEGER,
                 buy_count REAL,
-                stage INTEGER,
                 graduated_at TEXT
             )
         """)
 
         self.conn.commit()
 
-    # ── 상태 관리 ──────────────────────────────────────
-
+    # 상태 관리
     def get_state(self, ticker):
         c = self.conn.cursor()
         c.execute("SELECT * FROM state WHERE ticker=?", (ticker,))
         row = c.fetchone()
         if row:
-            price_hist = json.loads(row[9]) if row[9] else []
             return {
                 "ticker":         row[0],
                 "seed":           row[1],
@@ -81,20 +75,16 @@ class Database:
                 "avg_price":      row[3],
                 "total_units":    row[4],
                 "buy_count":      row[5],
-                "stage":          row[6],
-                "split":          row[7],
-                "mode":           row[8] or "NORMAL",
-                "price_history":  price_hist,
+                "first_buy_done": row[6],
             }
         return None
 
     def save_state(self, ticker, data):
         c = self.conn.cursor()
-        price_hist_json = json.dumps(data.get("price_history", []))
         c.execute("""
             INSERT OR REPLACE INTO state
-            (ticker, seed, remaining_cash, avg_price, total_units, buy_count, stage, split, mode, price_history, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (ticker, seed, remaining_cash, avg_price, total_units, buy_count, first_buy_done, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             ticker,
             data["seed"],
@@ -102,10 +92,7 @@ class Database:
             data["avg_price"],
             data["total_units"],
             data["buy_count"],
-            data["stage"],
-            data.get("split", 40),
-            data.get("mode", "NORMAL"),
-            price_hist_json,
+            data.get("first_buy_done", 0),
             datetime.now().isoformat()
         ))
         self.conn.commit()
@@ -115,8 +102,7 @@ class Database:
         c.execute("UPDATE state SET seed=? WHERE ticker=?", (new_seed, ticker))
         self.conn.commit()
 
-    # ── 거래 로그 ──────────────────────────────────────
-
+    # 거래 로그
     def log_trade(self, ticker, side, price, units, amount_krw):
         c = self.conn.cursor()
         c.execute("""
@@ -134,22 +120,19 @@ class Database:
         """, (ticker, limit))
         return c.fetchall()
 
-    # ── 졸업 기록 ──────────────────────────────────────
-
+    # 졸업 기록
     def log_graduation(self, ticker, profit_krw, buy_count):
-        state = self.get_state(ticker)
-        stage = state["stage"] if state else 1
         c = self.conn.cursor()
         c.execute("""
-            INSERT INTO graduation (ticker, profit_krw, buy_count, stage, graduated_at)
-            VALUES (?, ?, ?, ?, ?)
-        """, (ticker, profit_krw, buy_count, stage, datetime.now().isoformat()))
+            INSERT INTO graduation (ticker, profit_krw, buy_count, graduated_at)
+            VALUES (?, ?, ?, ?)
+        """, (ticker, profit_krw, buy_count, datetime.now().isoformat()))
         self.conn.commit()
 
     def get_graduation_history(self, limit=10):
         c = self.conn.cursor()
         c.execute("""
-            SELECT ticker, profit_krw, buy_count, stage, graduated_at
+            SELECT ticker, profit_krw, buy_count, graduated_at
             FROM graduation ORDER BY graduated_at DESC LIMIT ?
         """, (limit,))
         return c.fetchall()

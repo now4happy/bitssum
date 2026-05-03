@@ -1,24 +1,26 @@
 """
 version.py
-무매 V4 버전 관리
+무매 (무한매수법) V5.0
 """
 
-VERSION = "4.1.1"
-VERSION_NAME = "무매 V4.1.1 완전판"
-BUILD_DATE = "2026-04-27"
+VERSION = "5.0.0"
+VERSION_NAME = "무매 V5.0"
+BUILD_DATE = "2026-05-03"
 
 CHANGELOG = """
-V4.1.1 (2026-04-27)
-- FIX: /register 명령어 충돌 문제 해결
-- FIX: CommandHandler 제거하여 텍스트 핸들러로 통합
-- 모든 /register 명령어 정상 작동 보장
-
-V4.1.0 (2026-04-26)
-- 버전 관리 시스템 도입
-- /balance 명령어 추가
-- 좀비봇 지원
-- 시드머니 관리 개선
+V5.0.0 (2026-05-03) - 새 출발
+- 완전히 새로운 코드베이스
+- 첫 매수 시장가 자동 진입
+- 소수점 10자리 수량 처리
+- 시드머니 50만원 ~ 5천만원
+- BTC/ETH 전용
+- 불필요한 요소 제거 (RP 등)
+- 간소화된 UI
+- 백테스팅 검증 완료 (+7.15% 수익)
 """
 
 def get_version():
     return f"{VERSION_NAME} (빌드: {BUILD_DATE})"
+
+def get_changelog():
+    return CHANGELOG
