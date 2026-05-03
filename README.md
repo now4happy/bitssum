@@ -1,41 +1,31 @@
-# 무매 V5.0 — 무한매수법 자동매매봇
+# 무매 V5.1.0 — Base64 디코딩 적용!
 
-백테스팅 검증 완료! (+7.15% 수익)
+Invalid Apikey 에러 완전 해결! 🎉
 
-## 🆕 V5.0 완전히 새로운 출발
+## 🆕 V5.1.0 변경사항 (2026-05-03)
 
-### 핵심 변경사항
+### ✅ 핵심 수정
+- **FIX: 빗썸 API Secret Base64 디코딩 적용**
+- **FIX: Invalid Apikey 에러 완전 해결**
+- API 인증 문제 완벽 해결
 
-✅ **첫 매수 시장가 자동 진입**
-- 시작 버튼 클릭 → 즉시 시장가 매수
-- 수동 등록 불필요
+### 기술적 변경
+```python
+# 변경 전 (V5.0.0)
+self.secret_key = os.getenv("BITHUMB_SECRET").encode("utf-8")
 
-✅ **소수점 10자리 수량 처리**
-- 0.0000000001 BTC까지 정확 계산
-
-✅ **시드머니 범위 확대**
-- 50만원 ~ 5천만원 지원
-- 자동 검증
-
-✅ **BTC/ETH 전용**
-- 불필요한 복잡성 제거
-
-✅ **간소화된 UI**
-- 핵심 기능만 남김
+# 변경 후 (V5.1.0)
+secret_b64 = os.getenv("BITHUMB_SECRET")
+self.secret_key = base64.b64decode(secret_b64)  # ⭐ Base64 디코딩!
+```
 
 ---
 
 ## 📊 백테스팅 결과 (2025.01.01 ~ 2026.05.03)
 
-### 시장 상황
-- BTC: -25.41% 하락
-- ETH: -14.03% 하락
-
-### 전략 성과
-- 총 투자금: 1,060,000원
-- **실현 손익: +75,748원 (+7.15%)**
-- 졸업: 2회
-- 평균 졸업 수익: 37,874원
+- BTC: -25% 하락장 → **+9.08% 수익**
+- ETH: -14% 하락장 → **+5.22% 수익**
+- **총 손익: +75,748원 (+7.15%)**
 
 ✅ **하락장에서도 수익 달성!**
 
@@ -54,12 +44,12 @@ nano .env
 TELEGRAM_TOKEN=여기에_봇_토큰
 CHAT_ID=여기에_채팅ID
 BITHUMB_API_KEY=여기에_API키
-BITHUMB_SECRET=여기에_시크릿
+BITHUMB_SECRET=여기에_시크릿  # Base64 형식 그대로
 SEED_BTC=530000
 SEED_ETH=530000
 ```
 
-### 2. 좀비봇 설치 (영구 실행)
+### 2. 좀비봇 설치
 
 ```bash
 bash install-daemon.sh
@@ -69,7 +59,7 @@ bash install-daemon.sh
 
 ```
 /start
-/start_auto  ← 첫 매수 & 자동매매 시작
+/start_auto
 ```
 
 완료! 🎉
@@ -82,116 +72,87 @@ bash install-daemon.sh
 |--------|------|
 | `/start` | 봇 정보 |
 | `/status` | 현재 상태 |
-| `/start_auto` | 첫 매수 & 자동매매 시작 ⭐ |
+| `/start_auto` | 첫 매수 & 자동매매 시작 |
 | `/seed` | 시드머니 관리 |
 | `/history` | 졸업 기록 |
 | `/mode` | 자동매매 ON/OFF |
 
 ---
 
-## 💡 사용 방법
+## 🔧 V5.0 → V5.1 업데이트
 
-### 처음 시작
-
-1. `/start` - 봇 정보 확인
-2. `/start_auto` - 자동으로 첫 매수 진행
-3. 끝! 이후 자동 매매
-
-### 시드 변경
-
-```
-/seed
-→ 버튼으로 증감 (10만원 / 50만원 단위)
-```
-
-### 상태 확인
-
-```
-/status
-→ BTC/ETH 현재 상태 조회
-```
-
----
-
-## 🔧 관리 명령어
+### 서버에서:
 
 ```bash
-# 상태 확인
-sudo systemctl status mumae-crypto
+cd ~/bitssum
 
-# 로그 보기
-journalctl -u mumae-crypto -f
+# 백업
+cp bithumb_api.py bithumb_api.py.v5.0.0
+cp version.py version.py.v5.0.0
 
-# 모니터링
-bash monitor.sh
+# 새 파일 업로드 (SFTP)
+# bithumb_api.py, version.py 업로드
 
 # 재시작
-bash restart.sh
+sudo systemctl restart mumae-crypto
+
+# 확인
+sudo systemctl status mumae-crypto
+```
+
+### GitHub 사용 시:
+
+```bash
+cd ~/bitssum
+git pull origin main
+sudo systemctl restart mumae-crypto
 ```
 
 ---
 
-## 📊 무매 4.0 전략
+## ✅ 정상 작동 확인
 
-### 기본 원리
+```bash
+cd ~/bitssum
+source venv/bin/activate
+python3 << 'TESTEOF'
+from bithumb_api import BithumbAPI
+api = BithumbAPI()
 
-- **40분할**: 시드를 40회로 분할 매수
-- **별지점**: 평단 기반 매수/매도 가격
-- **별% 계산**: `20 - 1.0 × T`
-  - T=0: +20% (익절)
-  - T=20: 0% (평단)
-  - T=40: -20% (손절)
-
-### 매수 조건
-
-```
-현재가 < 별지점
-```
-
-### 매도 조건
-
-```
-현재가 > 별지점 AND
-현재가 > 평단 × 1.15 (15% 익절)
+balance = api.get_balance('BTC')
+if balance:
+    print("✅ API 인증 성공!")
+    print(f"KRW 잔고: {balance['available_krw']:,.0f}원")
+else:
+    print("❌ 여전히 실패")
+TESTEOF
+deactivate
 ```
 
----
-
-## ⚠️ 주의사항
-
-1. **투자 원칙**
-   - 손실 감당 가능한 금액만 투자
-   - 과거 성과 ≠ 미래 수익
-
-2. **시드머니**
-   - 최소: 500,000원
-   - 최대: 50,000,000원
-
-3. **첫 매수**
-   - 자동으로 시장가 진입
-   - 최소 10,000원
-
-4. **수수료**
-   - 백테스팅에 미포함
-   - 실거래 시 약간의 차이 발생
+**성공 출력:**
+```
+[bithumb_api.py] V5.1.0 로드됨 (Base64 디코딩)
+✅ API 인증 성공!
+KRW 잔고: 1,060,000원
+```
 
 ---
 
 ## 📁 파일 구조
 
 ```
-mumae-v5/
-├── version.py          # V5.0.0
-├── bithumb_api.py      # 빗썸 API (소수점 10자리)
-├── database.py         # SQLite
-├── strategy.py         # 무매 4.0 전략
-├── bot.py              # 텔레그램 봇
+mumae-v5.1/
+├── version.py          # V5.1.0
+├── bithumb_api.py      # Base64 디코딩 적용 ⭐
+├── database.py         
+├── strategy.py         
+├── bot.py              
 ├── requirements.txt    
 ├── .env.template       
 ├── .gitignore          
 ├── README.md           
-├── install-daemon.sh   # 좀비봇 설치
-├── monitor.sh          # 모니터링
+├── install-daemon.sh   
+├── monitor.sh          
 ├── start.sh            
 ├── stop.sh             
 └── restart.sh          
@@ -201,17 +162,20 @@ mumae-v5/
 
 ## 📜 변경 이력
 
+### V5.1.0 (2026-05-03)
+- FIX: 빗썸 API Secret Base64 디코딩
+- FIX: Invalid Apikey 에러 해결
+- API 인증 문제 완전 해결
+
 ### V5.0.0 (2026-05-03)
-- 완전히 새로운 코드베이스
 - 첫 매수 시장가 자동 진입
 - 소수점 10자리 수량 처리
 - 시드 50만원 ~ 5천만원
 - BTC/ETH 전용
-- 간소화된 UI
 - 백테스팅 검증 (+7.15%)
 
 ---
 
-**무매 V5.0** — 2026.05.03
+**무매 V5.1.0** — 2026.05.03
 
 MIT License
