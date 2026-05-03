@@ -1,10 +1,9 @@
 """
-bot.py — 무매 V5.0 텔레그램 봇
+bot.py — 무매 V5.0 텔레그램 봇 (수정본)
 
-간소화된 UI
-- 첫 매수 자동 진입
-- BTC/ETH 전용
-- 불필요한 요소 제거
+수정사항:
+- asyncio 이벤트 루프 충돌 해결
+- 에러 메시지 개선
 """
 
 import os
@@ -98,7 +97,7 @@ async def cmd_status(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 
 # ══════════════════════════════════════════════════════
-# /start_auto - 첫 매수 & 자동매매 시작
+# /start_auto - 첫 매수 & 자동매매 시작 (에러 처리 개선)
 # ══════════════════════════════════════════════════════
 
 async def cmd_start_auto(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -106,20 +105,44 @@ async def cmd_start_auto(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text("🚀 자동매매 시작 중...\n첫 매수를 진행합니다.")
     
+    success_count = 0
+    
     for ticker, strat in strategies.items():
         if not strat.first_buy_done:
-            result, msg = strat.auto_first_buy()
-            await update.message.reply_text(msg)
-            if not result:
-                continue
+            try:
+                result, msg = strat.auto_first_buy()
+                await update.message.reply_text(msg)
+                
+                if result and result.get("status") == "0000":
+                    success_count += 1
+                elif not result:
+                    await update.message.reply_text(
+                        f"⚠️ [{ticker}] 첫 매수 실패\n"
+                        f"이유: {msg}"
+                    )
+                    
+            except Exception as e:
+                logger.error(f"[{ticker}] 첫 매수 오류: {e}")
+                await update.message.reply_text(
+                    f"❌ [{ticker}] 첫 매수 오류!\n{str(e)}"
+                )
     
-    global auto_on
-    auto_on = True
-    
-    await update.message.reply_text(
-        "✅ 자동매매 시작 완료!\n"
-        "3분마다 시장을 분석하고 자동으로 거래합니다."
-    )
+    if success_count > 0:
+        global auto_on
+        auto_on = True
+        await update.message.reply_text(
+            f"✅ {success_count}개 종목 첫 매수 완료!\n"
+            "3분마다 자동으로 거래합니다."
+        )
+    else:
+        await update.message.reply_text(
+            "⚠️ 첫 매수 실패!\n\n"
+            "확인사항:\n"
+            "1. 빗썸 KRW 잔고 확인\n"
+            "2. API 권한 확인 (거래 권한)\n"
+            "3. 서버 로그 확인:\n"
+            "   journalctl -u mumae-crypto -n 50"
+        )
 
 
 # ══════════════════════════════════════════════════════
@@ -239,7 +262,6 @@ async def on_button(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             delta = int(parts[3])
             new_seed = strat.seed + (delta if action == "add" else -delta)
             
-            # 범위 검증
             if new_seed < 500000:
                 await q.edit_message_text(
                     "❌ 최소 시드는 500,000원입니다.",
@@ -262,11 +284,26 @@ async def on_button(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 
 # ══════════════════════════════════════════════════════
-# 자동매매 루프
+# 자동매매 루프 (수정됨 - asyncio 문제 해결)
 # ══════════════════════════════════════════════════════
 
 def run_auto(app):
+    """
+    자동매매 루프
+    asyncio.run() 대신 create_task() 사용
+    """
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    
+    async def send_msg(text):
+        """메시지 전송 헬퍼"""
+        try:
+            await app.bot.send_message(ALLOWED_CHAT, text)
+        except Exception as e:
+            logger.error(f"메시지 전송 오류: {e}")
+    
     def job():
+        """3분마다 실행"""
         if not auto_on:
             return
 
@@ -279,29 +316,31 @@ def run_auto(app):
                 # 체결 확인
                 event, msg = strat.check_orders_filled()
                 if event and msg:
-                    asyncio.run(app.bot.send_message(ALLOWED_CHAT, msg))
+                    loop.run_until_complete(send_msg(msg))
 
                 # 구간 판단
                 zone, reason = strat.get_zone()
 
                 if zone == "BUY":
                     _, msg = strat.place_buy_order()
-                    if msg and "대기" not in msg:
-                        asyncio.run(app.bot.send_message(ALLOWED_CHAT, msg))
+                    if msg and "대기" not in msg and "실패" not in msg:
+                        loop.run_until_complete(send_msg(msg))
                 
                 elif zone == "SELL":
                     _, msg = strat.place_sell_order()
-                    if msg and "대기" not in msg:
-                        asyncio.run(app.bot.send_message(ALLOWED_CHAT, msg))
+                    if msg and "대기" not in msg and "실패" not in msg:
+                        loop.run_until_complete(send_msg(msg))
 
             except Exception as e:
                 logger.error(f"자동매매 오류 [{ticker}]: {e}")
+                # 에러 메시지는 보내지 않음 (너무 많을 수 있음)
 
     def morning():
+        """일일 정산"""
         lines = [f"☀️ [ 일일 정산 ] — V{VERSION}\n"]
         for ticker, strat in strategies.items():
             lines.append(strat.get_status_text())
-        asyncio.run(app.bot.send_message(ALLOWED_CHAT, "\n".join(lines)))
+        loop.run_until_complete(send_msg("\n".join(lines)))
 
     schedule.every(3).minutes.do(job)
     schedule.every().day.at("09:01").do(morning)
